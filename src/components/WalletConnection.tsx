@@ -8,6 +8,7 @@ import {
   ChartBarIcon,
   TrophyIcon,
   UsersIcon,
+  ClipboardIcon,
 } from "@heroicons/react/24/outline";
 import logo from "../assets/logo.png";
 
@@ -49,6 +50,11 @@ const particles = Array.from({ length: 20 }, (_, i) => ({
   duration: Math.random() * 3 + 2,
   delay: Math.random() * 2,
 }));
+
+const CONTRACT_INFO = {
+  address: "rPd1Y1zKFwGyewLthzjRX8SuzNzd4Fn6FN",
+  dexscreener: "https://dexscreener.com/xrpl/434158494E4F0000000000000000000000000000.rPd1Y1zKFwGyewLthzjRX8SuzNzd4Fn6FN_xrp"
+};
 
 export default function WalletConnection() {
   const { setWalletConnection } = useGame();
@@ -98,6 +104,11 @@ export default function WalletConnection() {
         return prev - 1;
       });
     }, 1000);
+  };
+
+  const handleCopyAddress = () => {
+    navigator.clipboard.writeText(CONTRACT_INFO.address);
+    toast.success("Contract address copied!");
   };
 
   return (
@@ -252,6 +263,41 @@ export default function WalletConnection() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Contract Info Section */}
+      <motion.div 
+        className="mb-8 bg-game-dark/40 rounded-xl p-4 border border-game-accent/20"
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+      >
+        <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
+          <motion.button
+            className="flex items-center gap-2 px-4 py-2 bg-game-dark/60 rounded-lg
+                       hover:bg-game-dark/80 transition-colors duration-300"
+            onClick={handleCopyAddress}
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+          >
+            <ClipboardIcon className="w-4 h-4" />
+            <span className="font-mono text-sm">
+              {CONTRACT_INFO.address.slice(0, 6)}...{CONTRACT_INFO.address.slice(-4)}
+            </span>
+          </motion.button>
+          
+          <motion.a
+            href={CONTRACT_INFO.dexscreener}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-2 px-4 py-2 bg-game-accent/20 rounded-lg
+                       hover:bg-game-accent/30 transition-colors duration-300"
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+          >
+            <ChartBarIcon className="w-4 h-4" />
+            <span>View Chart</span>
+          </motion.a>
+        </div>
+      </motion.div>
 
       {/* Main content */}
       <motion.div
