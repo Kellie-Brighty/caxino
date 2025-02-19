@@ -1,0 +1,18 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+}
+
+body {
+  @apply bg-game-dark text-game-light min-h-screen;
+  background-image: radial-gradient(circle at center, rgba(109, 40, 217, 0.1) 0%, transparent 70%);
+}
+
+@layer utilities {
+  .text-shadow {
+    text-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  }
+} 
