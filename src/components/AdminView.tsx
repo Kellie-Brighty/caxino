@@ -45,8 +45,10 @@ export default function AdminView() {
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
     >
-      <h1 className="font-game text-2xl mb-6 text-game-accent">Admin Dashboard</h1>
-      
+      <h1 className="font-game text-2xl mb-6 text-game-accent">
+        Admin Dashboard
+      </h1>
+
       <div className="mb-8">
         <motion.button
           className="bg-game-accent/20 px-4 py-2 rounded-lg hover:bg-game-accent/30
@@ -85,7 +87,9 @@ export default function AdminView() {
         ))}
       </div>
 
-      <h2 className="font-game text-xl text-game-accent mt-12 mb-4">Cycle History</h2>
+      <h2 className="font-game text-xl text-game-accent mt-12 mb-4">
+        Cycle History
+      </h2>
       <div className="space-y-6">
         {cycleHistory.map((cycle) => (
           <motion.div
@@ -95,32 +99,51 @@ export default function AdminView() {
             animate={{ opacity: 1 }}
           >
             <div className="flex justify-between items-center mb-4">
-              <div className="font-game text-lg">Cycle #{cycle.cycleNumber}</div>
+              <div className="font-game text-lg">
+                Cycle #{cycle.cycleNumber}
+              </div>
               <div className="text-sm text-game-light/50">
                 {new Date(cycle.startTime).toLocaleDateString()}
               </div>
             </div>
-            
+
             {Object.entries(cycle.winners).filter(([_, w]) => w).length > 0 ? (
               <div className="space-y-3">
                 {Object.entries(cycle.winners)
                   .filter(([_, winner]) => winner)
-                  .map(([place, winner]) => (
-                    <div key={place} className="flex items-center gap-3">
-                      <span>{place === 'first' ? '🥇' : place === 'second' ? '🥈' : '🥉'}</span>
-                      <div>
-                        <div className="font-game text-game-accent">{winner.username}</div>
-                        <div className="text-xs text-game-light/50 font-mono">{winner.address}</div>
+                  .map(
+                    ([place, winner]: [
+                      string,
+                      { username: string; address: string }
+                    ]) => (
+                      <div key={place} className="flex items-center gap-3">
+                        <span>
+                          {place === "first"
+                            ? "🥇"
+                            : place === "second"
+                            ? "🥈"
+                            : "🥉"}
+                        </span>
+                        <div>
+                          <div className="font-game text-game-accent">
+                            {winner.username}
+                          </div>
+                          <div className="text-xs text-game-light/50 font-mono">
+                            {winner.address}
+                          </div>
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    )
+                  )}
               </div>
             ) : (
-              <div className="text-game-light/50 italic">No winners this cycle</div>
+              <div className="text-game-light/50 italic">
+                No winners this cycle
+              </div>
             )}
           </motion.div>
         ))}
       </div>
     </motion.div>
   );
-} 
+}

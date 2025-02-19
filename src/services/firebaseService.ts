@@ -317,7 +317,6 @@ export const firebaseService = {
   async initializeNewCycle(): Promise<void> {
     const cycleRef = ref(db, "currentCycle");
     const usersRef = ref(db, "users");
-    const historyRef = ref(db, "cycleHistory");
     const snapshot = await get(cycleRef);
     const currentCycle = snapshot.val();
 

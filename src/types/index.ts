@@ -50,6 +50,19 @@ export interface WinnerAlert {
   timestamp: string;
 }
 
+export interface CycleHistory {
+  cycleNumber: number;
+  startTime: string;
+  endTime: string;
+  targetPoints: number;
+  winners: {
+    first?: { username: string; address: string; timestamp: string };
+    second?: { username: string; address: string; timestamp: string };
+    third?: { username: string; address: string; timestamp: string };
+  };
+  completed: boolean;
+}
+
 export interface PointsCycle {
   targetPoints: number;
   startTime: string;
