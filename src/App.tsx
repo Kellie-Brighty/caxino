@@ -6,6 +6,7 @@ import WalletConnection from "./components/WalletConnection";
 import { GameProvider, useGame } from "./context/GameContext";
 import GameBackground from "./components/GameBackground";
 import AllPlayers from "./components/AllPlayers";
+import AdminView from "./components/AdminView";
 import { Routes, Route, BrowserRouter as Router } from "react-router-dom";
 
 function GameContent() {
@@ -48,6 +49,7 @@ function App() {
           <Routes>
             <Route path="/" element={<GameContent />} />
             <Route path="/rankings" element={<AllPlayers />} />
+            <Route path="/admin" element={<AdminView />} />
           </Routes>
         </div>
       </GameProvider>

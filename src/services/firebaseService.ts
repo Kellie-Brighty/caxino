@@ -5,9 +5,10 @@ import {
   get,
   update,
   DataSnapshot,
+  push,
 } from "firebase/database";
 import { db } from "../config/firebase";
-import { LeaderboardEntry, Player, GameStats } from "../types";
+import { LeaderboardEntry, Player, GameStats, WinnerAlert } from "../types";
 
 export const firebaseService = {
   // User Management
@@ -84,7 +85,7 @@ export const firebaseService = {
         .filter((user) => {
           if (period === "today") return user.lastPlayed >= startOfDay;
           if (period === "week") return user.lastPlayed >= startOfWeek;
-          return true;
+          return user.points >= 10;
         })
         .sort((a, b) => b.points - a.points)
         .map((entry, index) => ({ ...entry, rank: index + 1 }))
@@ -262,5 +263,35 @@ export const firebaseService = {
     });
 
     return unsubscribe;
+  },
+
+  onRecentWinner(callback: (winner: WinnerAlert | null) => void): () => void {
+    const winnersRef = ref(db, "winners");
+
+    const unsubscribe = onValue(winnersRef, (snapshot: DataSnapshot) => {
+      const winners = snapshot.val();
+      if (!winners) return callback(null);
+
+      // Get the most recent winner
+      const recentWinner = Object.values(winners).sort(
+        (a: any, b: any) =>
+          new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+      )[0] as WinnerAlert;
+
+      callback(recentWinner);
+    });
+
+    return unsubscribe;
+  },
+
+  async addWinner(username: string, points: number): Promise<void> {
+    const winnersRef = ref(db, "winners");
+    const newWinnerRef = push(winnersRef);
+
+    await set(newWinnerRef, {
+      username,
+      points,
+      timestamp: new Date().toISOString(),
+    });
   },
 };

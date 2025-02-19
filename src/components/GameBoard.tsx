@@ -8,6 +8,7 @@ import { GAME_SOUNDS, playSound } from "../utils/sounds";
 import UserInfo from "./UserInfo";
 import { useNavigate } from "react-router-dom";
 import logo from "../assets/logo.jpg";
+import { firebaseService } from "../services/firebaseService";
 
 // Background particles
 const particles = Array.from({ length: 15 }, (_, i) => ({
@@ -102,6 +103,9 @@ export default function GameBoard() {
     }
     setShowResult(true);
     calculatePoints();
+    if (points > 0 && username) {
+      firebaseService.addWinner(username, points);
+    }
     setTimeout(() => {
       setShowResult(false);
       resetGame();

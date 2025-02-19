@@ -1,9 +1,9 @@
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "react-hot-toast";
 import { useGame } from "../context/GameContext";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { firebaseService } from "../services/firebaseService";
-import { GameStats } from "../types";
+import { GameStats, WinnerAlert } from "../types";
 import {
   ChartBarIcon,
   TrophyIcon,
@@ -55,7 +55,8 @@ export default function WalletConnection() {
   const [isHovering, setIsHovering] = useState(false);
   const [countdown, setCountdown] = useState(3);
   const [showStart, setShowStart] = useState(true);
-  const [jackpot, setJackpot] = useState(1000);
+  const [currentWinner, setCurrentWinner] = useState<WinnerAlert | null>(null);
+  const [showWinner, setShowWinner] = useState(false);
   const [gameStats, setGameStats] = useState<GameStats>({
     totalPlayers: 0,
     totalRegistered: 0,
@@ -66,12 +67,14 @@ export default function WalletConnection() {
   });
 
   useEffect(() => {
-    const interval = setInterval(() => {
-      setIsHovering((prev) => !prev);
-      // Randomly increase jackpot
-      setJackpot((prev) => prev + Math.floor(Math.random() * 50));
-    }, 3000);
-    return () => clearInterval(interval);
+    const unsubscribe = firebaseService.onRecentWinner((winner) => {
+      if (winner) {
+        setCurrentWinner(winner);
+        setShowWinner(true);
+        setTimeout(() => setShowWinner(false), 5000);
+      }
+    });
+    return () => unsubscribe();
   }, []);
 
   useEffect(() => {
@@ -230,20 +233,26 @@ export default function WalletConnection() {
         </motion.div>
       ))}
 
-      {/* Jackpot Display */}
-      <motion.div
-        className="absolute top-0 right-4 bg-game-dark/60 px-4 py-2 rounded-b-lg backdrop-blur-sm"
-        animate={{ y: [-20, 0] }}
-      >
-        <div className="font-game text-sm text-game-accent">JACKPOT</div>
-        <motion.div
-          className="font-game font-bold"
-          animate={{ scale: [1, 1.1, 1] }}
-          transition={{ duration: 0.5, repeat: Infinity }}
-        >
-          {jackpot.toLocaleString()} Points
-        </motion.div>
-      </motion.div>
+      {/* Winner Alert */}
+      <AnimatePresence>
+        {showWinner && currentWinner && (
+          <motion.div
+            className="fixed top-4 right-4 bg-game-dark/90 px-6 py-4 rounded-lg backdrop-blur-sm
+                       border border-game-accent/20 shadow-[0_0_20px_rgba(34,211,238,0.2)]"
+            initial={{ x: 100, opacity: 0 }}
+            animate={{ x: 0, opacity: 1 }}
+            exit={{ x: 100, opacity: 0 }}
+          >
+            <div className="font-game text-sm text-game-accent mb-1">
+              New Winner! 🎉
+            </div>
+            <div className="font-game text-lg">{currentWinner.username}</div>
+            <div className="font-game text-xl text-game-accent">
+              +{currentWinner.points.toLocaleString()} pts
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Main content */}
       <motion.div

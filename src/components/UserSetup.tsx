@@ -3,6 +3,7 @@ import { useState } from "react";
 import { toast } from "react-hot-toast";
 import { useGame } from "../context/GameContext";
 import { firebaseService } from "../services/firebaseService";
+import { isValidXRPAddress } from "../utils/validation";
 
 export default function UserSetup() {
   const { setGameStarted, dispatch } = useGame();
@@ -23,6 +24,12 @@ export default function UserSetup() {
     // Basic wallet address validation
     if (!/^[0-9a-zA-Z]{20,}$/.test(walletAddress)) {
       toast.error("Please enter a valid wallet address");
+      setIsSubmitting(false);
+      return;
+    }
+
+    if (!isValidXRPAddress(walletAddress)) {
+      toast.error("Please enter a valid XRP wallet address");
       setIsSubmitting(false);
       return;
     }

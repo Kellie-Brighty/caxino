@@ -44,6 +44,12 @@ export interface GameStats {
   gamesPlayedToday: number;
 }
 
+export interface WinnerAlert {
+  username: string;
+  points: number;
+  timestamp: string;
+}
+
 export type GameAction =
   // ... existing actions
   | { type: "RESTORE_SESSION"; payload: { username: string; walletAddress: string; isWalletConnected: boolean } }
