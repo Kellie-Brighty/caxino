@@ -1,7 +1,7 @@
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "react-hot-toast";
 import { useGame } from "../context/GameContext";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
 import { firebaseService } from "../services/firebaseService";
 import { GameStats, WinnerAlert } from "../types";
 import {
@@ -52,7 +52,6 @@ const particles = Array.from({ length: 20 }, (_, i) => ({
 
 export default function WalletConnection() {
   const { setWalletConnection } = useGame();
-  const [isHovering, setIsHovering] = useState(false);
   const [countdown, setCountdown] = useState(3);
   const [showStart, setShowStart] = useState(true);
   const [currentWinner, setCurrentWinner] = useState<WinnerAlert | null>(null);
@@ -258,12 +257,6 @@ export default function WalletConnection() {
       <motion.div
         className="relative z-10 backdrop-blur-lg bg-game-secondary/10 rounded-3xl p-8 border border-game-accent/20
                    shadow-[0_0_50px_rgba(34,211,238,0.1)]"
-        animate={{
-          boxShadow: isHovering
-            ? "0 0 70px rgba(34,211,238,0.2)"
-            : "0 0 50px rgba(34,211,238,0.1)",
-        }}
-        transition={{ duration: 1.5 }}
       >
         <motion.div
           className="absolute -top-6 left-1/2 -translate-x-1/2 bg-game-accent text-game-dark px-4 py-1 
