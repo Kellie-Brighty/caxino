@@ -50,6 +50,18 @@ export interface WinnerAlert {
   timestamp: string;
 }
 
+export interface PointsCycle {
+  targetPoints: number;
+  startTime: string;
+  endTime: string;
+  cycleNumber: number;
+  winners: {
+    first?: { username: string; address: string; timestamp: string };
+    second?: { username: string; address: string; timestamp: string };
+    third?: { username: string; address: string; timestamp: string };
+  };
+}
+
 export type GameAction =
   // ... existing actions
   | { type: "RESTORE_SESSION"; payload: { username: string; walletAddress: string; isWalletConnected: boolean } }

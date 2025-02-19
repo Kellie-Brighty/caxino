@@ -8,7 +8,26 @@ import {
   push,
 } from "firebase/database";
 import { db } from "../config/firebase";
-import { LeaderboardEntry, Player, GameStats, WinnerAlert } from "../types";
+import {
+  LeaderboardEntry,
+  Player,
+  GameStats,
+  WinnerAlert,
+  PointsCycle,
+} from "../types";
+
+interface CycleHistory {
+  cycleNumber: number;
+  startTime: string;
+  endTime: string;
+  targetPoints: number;
+  winners: {
+    first?: { username: string; address: string; timestamp: string };
+    second?: { username: string; address: string; timestamp: string };
+    third?: { username: string; address: string; timestamp: string };
+  };
+  completed: boolean;
+}
 
 export const firebaseService = {
   // User Management
@@ -293,5 +312,141 @@ export const firebaseService = {
       points,
       timestamp: new Date().toISOString(),
     });
+  },
+
+  async initializeNewCycle(): Promise<void> {
+    const cycleRef = ref(db, "currentCycle");
+    const usersRef = ref(db, "users");
+    const historyRef = ref(db, "cycleHistory");
+    const snapshot = await get(cycleRef);
+    const currentCycle = snapshot.val();
+
+    // Save current cycle to history if it exists
+    if (currentCycle) {
+      const historyKey = `cycle_${currentCycle.cycleNumber}`;
+      await set(ref(db, `cycleHistory/${historyKey}`), {
+        ...currentCycle,
+        completed: true,
+      });
+    }
+
+    const now = new Date();
+    const endTime = new Date(now.getTime() + 12 * 60 * 60 * 1000);
+
+    const newCycle = {
+      targetPoints: 2000,
+      startTime: now.toISOString(),
+      endTime: endTime.toISOString(),
+      cycleNumber: currentCycle ? currentCycle.cycleNumber + 1 : 1,
+      winners: {
+        first: null,
+        second: null,
+        third: null,
+      },
+    };
+
+    await set(cycleRef, newCycle);
+
+    // Reset all user points
+    const usersSnapshot = await get(usersRef);
+    const users = usersSnapshot.val();
+    if (users) {
+      const updates: { [key: string]: any } = {};
+      Object.keys(users).forEach((userKey) => {
+        updates[`users/${userKey}/points`] = 0;
+        updates[`users/${userKey}/lastReset`] = now.toISOString();
+      });
+      await update(ref(db), updates);
+    }
+  },
+
+  async forceNewCycle(): Promise<void> {
+    await this.initializeNewCycle();
+  },
+
+  onCurrentCycle(callback: (cycle: PointsCycle) => void): () => void {
+    const cycleRef = ref(db, "currentCycle");
+
+    const unsubscribe = onValue(cycleRef, async (snapshot: DataSnapshot) => {
+      const cycle = snapshot.val();
+      if (!cycle) {
+        await this.initializeNewCycle();
+        // Get the newly initialized cycle
+        const newSnapshot = await get(cycleRef);
+        callback(newSnapshot.val());
+      } else {
+        callback(cycle);
+      }
+    });
+
+    return unsubscribe;
+  },
+
+  async checkAndUpdateWinners(
+    username: string,
+    address: string,
+    points: number
+  ): Promise<void> {
+    const cycleRef = ref(db, "currentCycle");
+    const snapshot = await get(cycleRef);
+    const cycle = snapshot.val();
+
+    if (!cycle || points < cycle.targetPoints) return;
+
+    if (!cycle.winners.first) {
+      await update(cycleRef, {
+        "winners/first": {
+          username,
+          address,
+          timestamp: new Date().toISOString(),
+        },
+      });
+    } else if (!cycle.winners.second) {
+      await update(cycleRef, {
+        "winners/second": {
+          username,
+          address,
+          timestamp: new Date().toISOString(),
+        },
+      });
+    } else if (!cycle.winners.third) {
+      await update(cycleRef, {
+        "winners/third": {
+          username,
+          address,
+          timestamp: new Date().toISOString(),
+        },
+      });
+      // All three winners found, start new cycle
+      await this.initializeNewCycle();
+    }
+  },
+
+  async updateCurrentCycleTarget(): Promise<void> {
+    const cycleRef = ref(db, "currentCycle");
+    const snapshot = await get(cycleRef);
+    const currentCycle = snapshot.val();
+
+    if (currentCycle) {
+      await update(cycleRef, {
+        targetPoints: 2000,
+        startTime: new Date().toISOString(),
+        endTime: new Date(Date.now() + 12 * 60 * 60 * 1000).toISOString(),
+      });
+    }
+  },
+
+  onCycleHistory(callback: (history: CycleHistory[]) => void): () => void {
+    const historyRef = ref(db, "cycleHistory");
+
+    const unsubscribe = onValue(historyRef, (snapshot: DataSnapshot) => {
+      const history = snapshot.val();
+      if (!history) return callback([]);
+
+      const historyArray = Object.values(history) as CycleHistory[];
+      callback(historyArray.sort((a, b) => b.cycleNumber - a.cycleNumber));
+    });
+
+    return unsubscribe;
   },
 };

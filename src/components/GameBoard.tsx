@@ -9,6 +9,7 @@ import UserInfo from "./UserInfo";
 import { useNavigate } from "react-router-dom";
 import logo from "../assets/logo.jpg";
 import { firebaseService } from "../services/firebaseService";
+import CycleInfo from "./CycleInfo";
 
 // Background particles
 const particles = Array.from({ length: 15 }, (_, i) => ({
@@ -23,7 +24,14 @@ const particles = Array.from({ length: 15 }, (_, i) => ({
 export default function GameBoard() {
   const navigate = useNavigate();
   const {
-    state: { isGameStarted, userNumbers, points, systemNumbers, username },
+    state: {
+      isGameStarted,
+      userNumbers,
+      points,
+      systemNumbers,
+      username,
+      walletAddress,
+    },
     setGameStarted,
     setUserNumbers,
     generateSystemNumbers,
@@ -103,8 +111,9 @@ export default function GameBoard() {
     }
     setShowResult(true);
     calculatePoints();
-    if (points > 0 && username) {
+    if (points > 0 && username && walletAddress) {
       firebaseService.addWinner(username, points);
+      firebaseService.checkAndUpdateWinners(username, walletAddress, points);
     }
     setTimeout(() => {
       setShowResult(false);
@@ -124,6 +133,16 @@ export default function GameBoard() {
       ) : (
         <>
           <UserInfo />
+
+          {/* Cycle Info */}
+          <motion.div
+            className="mb-6"
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+          >
+            <CycleInfo />
+          </motion.div>
+
           {/* Floating Logo */}
           <motion.div
             className="fixed top-4 right-4 z-50"

@@ -1,12 +1,21 @@
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { firebaseService } from "../services/firebaseService";
-import { LeaderboardEntry } from "../types";
+import { LeaderboardEntry, CycleHistory } from "../types";
+import { toast } from "react-hot-toast";
 
 export default function AdminView() {
   const [topPlayers, setTopPlayers] = useState<LeaderboardEntry[]>([]);
   const [isAuthorized, setIsAuthorized] = useState(false);
   const adminPassword = import.meta.env.VITE_ADMIN_PASSWORD;
+  const [cycleHistory, setCycleHistory] = useState<CycleHistory[]>([]);
+
+  const handleResetCycle = async () => {
+    if (window.confirm("Reset cycle target to 2000 points?")) {
+      await firebaseService.updateCurrentCycleTarget();
+      toast.success("Cycle target reset to 2000 points");
+    }
+  };
 
   useEffect(() => {
     const password = prompt("Enter admin password");
@@ -18,6 +27,13 @@ export default function AdminView() {
       return unsubscribe;
     }
   }, [adminPassword]);
+
+  useEffect(() => {
+    if (isAuthorized) {
+      const unsubscribe = firebaseService.onCycleHistory(setCycleHistory);
+      return () => unsubscribe();
+    }
+  }, [isAuthorized]);
 
   if (!isAuthorized) {
     return <div>Unauthorized</div>;
@@ -31,6 +47,18 @@ export default function AdminView() {
     >
       <h1 className="font-game text-2xl mb-6 text-game-accent">Admin Dashboard</h1>
       
+      <div className="mb-8">
+        <motion.button
+          className="bg-game-accent/20 px-4 py-2 rounded-lg hover:bg-game-accent/30
+                     transition-colors duration-300"
+          whileHover={{ scale: 1.05 }}
+          whileTap={{ scale: 0.95 }}
+          onClick={handleResetCycle}
+        >
+          Reset Cycle Target to 2000
+        </motion.button>
+      </div>
+
       <div className="space-y-4">
         {topPlayers.map((player, index) => (
           <motion.div
@@ -53,6 +81,43 @@ export default function AdminView() {
                 {player.points.toLocaleString()} pts
               </div>
             </div>
+          </motion.div>
+        ))}
+      </div>
+
+      <h2 className="font-game text-xl text-game-accent mt-12 mb-4">Cycle History</h2>
+      <div className="space-y-6">
+        {cycleHistory.map((cycle) => (
+          <motion.div
+            key={cycle.cycleNumber}
+            className="bg-game-dark/40 rounded-xl p-6"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+          >
+            <div className="flex justify-between items-center mb-4">
+              <div className="font-game text-lg">Cycle #{cycle.cycleNumber}</div>
+              <div className="text-sm text-game-light/50">
+                {new Date(cycle.startTime).toLocaleDateString()}
+              </div>
+            </div>
+            
+            {Object.entries(cycle.winners).filter(([_, w]) => w).length > 0 ? (
+              <div className="space-y-3">
+                {Object.entries(cycle.winners)
+                  .filter(([_, winner]) => winner)
+                  .map(([place, winner]) => (
+                    <div key={place} className="flex items-center gap-3">
+                      <span>{place === 'first' ? '🥇' : place === 'second' ? '🥈' : '🥉'}</span>
+                      <div>
+                        <div className="font-game text-game-accent">{winner.username}</div>
+                        <div className="text-xs text-game-light/50 font-mono">{winner.address}</div>
+                      </div>
+                    </div>
+                  ))}
+              </div>
+            ) : (
+              <div className="text-game-light/50 italic">No winners this cycle</div>
+            )}
           </motion.div>
         ))}
       </div>
