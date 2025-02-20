@@ -45,8 +45,30 @@ export const firebaseService = {
   // Points Management
   async updatePoints(walletAddress: string, newPoints: number): Promise<void> {
     const userRef = ref(db, `users/${walletAddress}`);
+    const rateRef = ref(db, `rateLimit/${walletAddress}`);
     const snapshot = await get(userRef);
+    const rateSnapshot = await get(rateRef);
     const userData = snapshot.val();
+    const rateData = rateSnapshot.val() || { lastSubmit: 0, count: 0 };
+
+    const now = Date.now();
+    const fiveMinutesAgo = now - 5 * 60 * 1000;
+
+    // Reset rate limit if it's been more than 5 minutes
+    if (rateData.lastSubmit < fiveMinutesAgo) {
+      rateData.count = 0;
+    }
+
+    // Check rate limit (max 20 submissions per 5 minutes)
+    if (rateData.count >= 20) {
+      throw new Error("Rate limit exceeded. Please wait a few minutes.");
+    }
+
+    // Update rate limit
+    await set(rateRef, {
+      lastSubmit: now,
+      count: rateData.count + 1,
+    });
 
     await update(userRef, {
       points: (userData?.points || 0) + newPoints,
@@ -447,5 +469,43 @@ export const firebaseService = {
     });
 
     return unsubscribe;
+  },
+
+  async deductPointsFromLeader(): Promise<void> {
+    const usersRef = ref(db, "users");
+    const snapshot = await get(usersRef);
+    const users = snapshot.val();
+
+    if (!users) return;
+
+    // Find the user with the highest points
+    const leadingPlayer = Object.entries(users).reduce(
+      (max: any, [key, user]: [string, any]) => {
+        if (!max || user.points > max.points) {
+          return { ...user, key };
+        }
+        return max;
+      },
+      null
+    );
+
+    if (leadingPlayer && leadingPlayer.points >= 1000) {
+      // Deduct 1000 points
+      await update(ref(db, `users/${leadingPlayer.key}`), {
+        points: leadingPlayer.points - 1000,
+        lastUpdated: new Date().toISOString(),
+      });
+
+      // Log the deduction
+      const deductionRef = push(ref(db, "pointDeductions"));
+      await set(deductionRef, {
+        username: leadingPlayer.username,
+        address: leadingPlayer.walletAddress,
+        amount: 1000,
+        timestamp: new Date().toISOString(),
+        previousPoints: leadingPlayer.points,
+        newPoints: leadingPlayer.points - 1000,
+      });
+    }
   },
 };

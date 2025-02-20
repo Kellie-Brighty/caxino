@@ -49,7 +49,7 @@ export default function AdminView() {
         Admin Dashboard
       </h1>
 
-      <div className="mb-8">
+      <div className="mb-8 space-x-4">
         <motion.button
           className="bg-game-accent/20 px-4 py-2 rounded-lg hover:bg-game-accent/30
                      transition-colors duration-300"
@@ -58,6 +58,21 @@ export default function AdminView() {
           onClick={handleResetCycle}
         >
           Reset Cycle Target to 2000
+        </motion.button>
+
+        <motion.button
+          className="bg-red-500/20 px-4 py-2 rounded-lg hover:bg-red-500/30
+                     transition-colors duration-300"
+          whileHover={{ scale: 1.05 }}
+          whileTap={{ scale: 0.95 }}
+          onClick={async () => {
+            if (window.confirm("Deduct 1000 points from the leading player?")) {
+              await firebaseService.deductPointsFromLeader();
+              toast.success("Deducted 1000 points from leader");
+            }
+          }}
+        >
+          Deduct 1000 from Leader
         </motion.button>
       </div>
 

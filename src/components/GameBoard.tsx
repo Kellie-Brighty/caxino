@@ -44,6 +44,8 @@ export default function GameBoard() {
   const [showResult, setShowResult] = useState(false);
   const [showMobileControls, setShowMobileControls] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
+  const [submitCooldown, setSubmitCooldown] = useState(0);
+  const SUBMIT_COOLDOWN_TIME = 20000; // 20 seconds in milliseconds
 
   useEffect(() => {
     const checkMobile = () => {
@@ -76,6 +78,13 @@ export default function GameBoard() {
 
   const handleNumberInput = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
+    const lastInputTime = localStorage.getItem('lastInputTime');
+    const now = Date.now();
+    if (lastInputTime && now - parseInt(lastInputTime) < 100) {
+      return;
+    }
+    localStorage.setItem('lastInputTime', now.toString());
+
     if (value === "" || (/^\d+$/.test(value) && parseInt(value) <= 100)) {
       setCurrentNumber(value);
     }
@@ -89,15 +98,52 @@ export default function GameBoard() {
 
   const handleAddNumber = () => {
     const num = parseInt(currentNumber);
+    const lastSubmitTime = localStorage.getItem('lastSubmitTime');
+    const now = Date.now();
+    if (lastSubmitTime && now - parseInt(lastSubmitTime) < SUBMIT_COOLDOWN_TIME) {
+      toast.error("You're submitting too fast!");
+      return;
+    }
+    setSubmitCooldown(SUBMIT_COOLDOWN_TIME);
+    const interval = setInterval(() => {
+      setSubmitCooldown(prev => Math.max(0, prev - 100));
+    }, 100);
+    setTimeout(() => clearInterval(interval), SUBMIT_COOLDOWN_TIME);
+
     if (num > 0 && num <= 100) {
       if (userNumbers.length >= 5) {
         toast.error("You can only select 5 numbers!");
         return;
       }
+      const lastNumberTime = localStorage.getItem('lastNumberTime');
+      if (lastNumberTime && now - parseInt(lastNumberTime) < 800) {
+        toast.error("Please slow down!");
+        return;
+      }
+      localStorage.setItem('lastNumberTime', now.toString());
+
       if (userNumbers.includes(num)) {
         toast.error("Number already selected!");
         return;
       }
+      const submitPattern = localStorage.getItem('submitPattern') || '[]';
+      const patterns = JSON.parse(submitPattern);
+      patterns.push({time: now, number: num});
+      if (patterns.length > 10) patterns.shift();
+      localStorage.setItem('submitPattern', JSON.stringify(patterns));
+      
+      if (patterns.length > 5) {
+        const intervals = patterns.slice(1).map((p: any, i: number) => 
+          p.time - patterns[i].time
+        );
+        const avgInterval = intervals.reduce((a: number, b: number) => a + b, 0) / intervals.length;
+        const allSimilar = intervals.every(int => Math.abs(int - avgInterval) < 50);
+        if (allSimilar) {
+          toast.error("Suspicious activity detected!");
+          return;
+        }
+      }
+
       setUserNumbers([...userNumbers, num]);
       setCurrentNumber("");
       playSound(GAME_SOUNDS.POP);
@@ -109,6 +155,25 @@ export default function GameBoard() {
       toast.error("Please select 5 numbers!");
       return;
     }
+    if (submitCooldown > 0) {
+      toast.error(`Please wait ${Math.ceil(submitCooldown / 1000)} seconds before submitting again`);
+      return;
+    }
+
+    const lastGameTime = localStorage.getItem('lastGameTime');
+    const now = Date.now();
+    if (lastGameTime && now - parseInt(lastGameTime) < SUBMIT_COOLDOWN_TIME) {
+      toast.error("Please wait before starting a new game");
+      return;
+    }
+    localStorage.setItem('lastGameTime', now.toString());
+
+    setSubmitCooldown(SUBMIT_COOLDOWN_TIME);
+    const interval = setInterval(() => {
+      setSubmitCooldown(prev => Math.max(0, prev - 1000));
+    }, 1000);
+    setTimeout(() => clearInterval(interval), SUBMIT_COOLDOWN_TIME);
+
     setShowResult(true);
     calculatePoints();
     if (points > 0 && username && walletAddress) {
@@ -311,17 +376,33 @@ export default function GameBoard() {
                     initial={{ x: -20, opacity: 0 }}
                     animate={{ x: 0, opacity: 1 }}
                   />
-                  <motion.button
-                    className="w-full sm:w-auto px-6 py-3 bg-game-primary rounded-lg font-game
-                               hover:bg-game-accent transition-colors duration-300"
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
-                    onClick={handleAddNumber}
-                    initial={{ x: 20, opacity: 0 }}
-                    animate={{ x: 0, opacity: 1 }}
-                  >
-                    Add
-                  </motion.button>
+                  <div className="relative">
+                    <motion.button
+                      className="w-full sm:w-auto px-6 py-3 bg-game-primary rounded-lg font-game
+                                 hover:bg-game-accent transition-colors duration-300 relative overflow-hidden"
+                      whileHover={{ scale: 1.05 }}
+                      whileTap={{ scale: 0.95 }}
+                      onClick={handleAddNumber}
+                      initial={{ x: 20, opacity: 0 }}
+                      animate={{ x: 0, opacity: 1 }}
+                      disabled={submitCooldown > 0}
+                    >
+                      Add
+                      {submitCooldown > 0 && (
+                        <motion.div
+                          className="absolute bottom-0 left-0 h-1 bg-game-accent"
+                          initial={{ width: "100%" }}
+                          animate={{ width: "0%" }}
+                          transition={{ duration: SUBMIT_COOLDOWN_TIME / 1000, ease: "linear" }}
+                        />
+                      )}
+                    </motion.button>
+                    {submitCooldown > 0 && (
+                      <div className="absolute -bottom-6 left-1/2 -translate-x-1/2 text-xs text-game-light/50">
+                        {Math.ceil(submitCooldown / 1000)}s
+                      </div>
+                    )}
+                  </div>
                 </div>
 
                 {/* Selected Numbers */}
@@ -352,9 +433,24 @@ export default function GameBoard() {
                   whileHover={{ scale: 1.02 }}
                   whileTap={{ scale: 0.98 }}
                   onClick={handleSubmit}
-                  disabled={userNumbers.length !== 5}
+                  disabled={userNumbers.length !== 5 || submitCooldown > 0}
                 >
-                  Submit Numbers
+                  <div className="relative">
+                    Submit Numbers
+                    {submitCooldown > 0 && (
+                      <>
+                        <motion.div
+                          className="absolute bottom-0 left-0 h-1 bg-game-primary"
+                          initial={{ width: "100%" }}
+                          animate={{ width: "0%" }}
+                          transition={{ duration: SUBMIT_COOLDOWN_TIME / 1000, ease: "linear" }}
+                        />
+                        <div className="absolute -bottom-6 left-1/2 -translate-x-1/2 text-xs text-game-light/50">
+                          {Math.ceil(submitCooldown / 1000)}s
+                        </div>
+                      </>
+                    )}
+                  </div>
                 </motion.button>
               </div>
             )}
