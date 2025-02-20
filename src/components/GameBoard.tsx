@@ -137,7 +137,7 @@ export default function GameBoard() {
           p.time - patterns[i].time
         );
         const avgInterval = intervals.reduce((a: number, b: number) => a + b, 0) / intervals.length;
-        const allSimilar = intervals.every(int => Math.abs(int - avgInterval) < 50);
+        const allSimilar = intervals.every((int: number) => Math.abs(int - avgInterval) < 50);
         if (allSimilar) {
           toast.error("Suspicious activity detected!");
           return;
