@@ -17,7 +17,6 @@ function GameContent() {
   return (
     <div className="relative min-h-screen bg-game-dark text-game-light p-4 overflow-hidden">
       <GameBackground />
-      <Toaster position="top-right" />
 
       <motion.div
         initial={{ opacity: 0, y: 20 }}
@@ -45,12 +44,13 @@ function App() {
   return (
     <Router>
       <GameProvider>
-        <div className="min-h-screen bg-game-dark text-white">
+        <div className="min-h-screen bg-game-dark text-white p-4 sm:p-8">
           <Routes>
             <Route path="/" element={<GameContent />} />
             <Route path="/rankings" element={<AllPlayers />} />
             <Route path="/admin" element={<AdminView />} />
           </Routes>
+          <Toaster position="top-right" />
         </div>
       </GameProvider>
     </Router>

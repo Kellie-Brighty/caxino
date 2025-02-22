@@ -10,6 +10,9 @@ import { useNavigate } from "react-router-dom";
 import logo from "../assets/logo.jpg";
 import { firebaseService } from "../services/firebaseService";
 import CycleInfo from "./CycleInfo";
+import { PaymentInfo } from "../types";
+import { PointsCycle } from "../types";
+import PaymentModal from "./PaymentModal";
 
 // Background particles
 const particles = Array.from({ length: 15 }, (_, i) => ({
@@ -31,6 +34,8 @@ export default function GameBoard() {
       systemNumbers,
       username,
       walletAddress,
+      ethAddress,
+      hasPaidForCurrentCycle,
     },
     setGameStarted,
     setUserNumbers,
@@ -38,6 +43,7 @@ export default function GameBoard() {
     calculatePoints,
     resetGame,
     setWalletConnection,
+    dispatch,
   } = useGame();
 
   const [currentNumber, setCurrentNumber] = useState<string>("");
@@ -48,6 +54,9 @@ export default function GameBoard() {
   const [submitCooldown, setSubmitCooldown] = useState(0);
   const ADD_COOLDOWN_TIME = 5000; // 5 seconds
   const SUBMIT_COOLDOWN_TIME = 10000; // 10 seconds
+  const [paymentInfo, _setPaymentInfo] = useState<PaymentInfo | null>(null);
+  const [currentCycle, setCurrentCycle] = useState<PointsCycle | null>(null);
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
 
   useEffect(() => {
     const checkMobile = () => {
@@ -57,6 +66,52 @@ export default function GameBoard() {
     window.addEventListener("resize", checkMobile);
     return () => window.removeEventListener("resize", checkMobile);
   }, []);
+
+  useEffect(() => {
+    // Monitor current cycle
+    const unsubscribe = firebaseService.onCurrentCycle((cycle) => {
+      setCurrentCycle(cycle);
+
+      // Check if cycle has ended
+      const now = new Date();
+      const cycleEndTime = new Date(cycle.endTime);
+
+      if (now > cycleEndTime) {
+        dispatch({ type: "SET_PAYMENT_STATUS", payload: false });
+        if (isGameStarted) {
+          setGameStarted(false);
+          toast.error(
+            "Game stopped: Current cycle has ended. Please make a new payment."
+          );
+        }
+      }
+    });
+
+    return () => unsubscribe();
+  }, []);
+
+  useEffect(() => {
+    const checkPaymentStatus = async () => {
+      if (ethAddress) {
+        const currentCycle = await firebaseService.getCurrentCycle();
+        // Check if cycle has ended before verifying payment
+        const now = new Date();
+        const cycleEndTime = new Date(currentCycle.endTime);
+
+        if (now > cycleEndTime) {
+          dispatch({ type: "SET_PAYMENT_STATUS", payload: false });
+          return;
+        }
+
+        const hasValidPayment = await firebaseService.hasValidPaymentForCycle(
+          ethAddress,
+          currentCycle.cycleNumber
+        );
+        dispatch({ type: "SET_PAYMENT_STATUS", payload: hasValidPayment });
+      }
+    };
+    checkPaymentStatus();
+  }, [ethAddress, currentCycle?.cycleNumber]);
 
   const swipeHandlers = useSwipeable({
     onSwipedLeft: () => {
@@ -72,6 +127,10 @@ export default function GameBoard() {
   });
 
   const handleStartGame = () => {
+    if (!hasPaidForCurrentCycle) {
+      setShowPaymentModal(true);
+      return;
+    }
     setGameStarted(true);
     setUserNumbers([]);
     generateSystemNumbers();
@@ -80,12 +139,12 @@ export default function GameBoard() {
 
   const handleNumberInput = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
-    const lastInputTime = localStorage.getItem('lastInputTime');
+    const lastInputTime = localStorage.getItem("lastInputTime");
     const now = Date.now();
     if (lastInputTime && now - parseInt(lastInputTime) < 100) {
       return;
     }
-    localStorage.setItem('lastInputTime', now.toString());
+    localStorage.setItem("lastInputTime", now.toString());
 
     if (value === "" || (/^\d+$/.test(value) && parseInt(value) <= 100)) {
       setCurrentNumber(value);
@@ -119,11 +178,11 @@ export default function GameBoard() {
       setUserNumbers([...userNumbers, num]);
       setCurrentNumber("");
       playSound(GAME_SOUNDS.POP);
-      
+
       // Start add cooldown
       setAddCooldown(ADD_COOLDOWN_TIME);
       const interval = setInterval(() => {
-        setAddCooldown(prev => Math.max(0, prev - 1000));
+        setAddCooldown((prev) => Math.max(0, prev - 1000));
       }, 1000);
       setTimeout(() => {
         clearInterval(interval);
@@ -138,13 +197,17 @@ export default function GameBoard() {
       return;
     }
     if (submitCooldown > 0) {
-      toast.error(`Please wait ${Math.ceil(submitCooldown / 1000)} seconds before submitting again`);
+      toast.error(
+        `Please wait ${Math.ceil(
+          submitCooldown / 1000
+        )} seconds before submitting again`
+      );
       return;
     }
 
     setSubmitCooldown(SUBMIT_COOLDOWN_TIME);
     const interval = setInterval(() => {
-      setSubmitCooldown(prev => Math.max(0, prev - 1000));
+      setSubmitCooldown((prev) => Math.max(0, prev - 1000));
     }, 1000);
     setTimeout(() => {
       clearInterval(interval);
@@ -371,7 +434,10 @@ export default function GameBoard() {
                           className="absolute bottom-0 left-0 h-1 bg-game-accent"
                           initial={{ width: "100%" }}
                           animate={{ width: "0%" }}
-                          transition={{ duration: ADD_COOLDOWN_TIME / 1000, ease: "linear" }}
+                          transition={{
+                            duration: ADD_COOLDOWN_TIME / 1000,
+                            ease: "linear",
+                          }}
                         />
                       )}
                     </motion.button>
@@ -421,7 +487,10 @@ export default function GameBoard() {
                           className="absolute bottom-0 left-0 h-1 bg-game-primary"
                           initial={{ width: "100%" }}
                           animate={{ width: "0%" }}
-                          transition={{ duration: SUBMIT_COOLDOWN_TIME / 1000, ease: "linear" }}
+                          transition={{
+                            duration: SUBMIT_COOLDOWN_TIME / 1000,
+                            ease: "linear",
+                          }}
                         />
                         <div className="absolute -bottom-6 left-1/2 -translate-x-1/2 text-xs text-game-light/50">
                           {Math.ceil(submitCooldown / 1000)}s
@@ -591,6 +660,55 @@ export default function GameBoard() {
               </motion.div>
             )}
           </AnimatePresence>
+
+          {paymentInfo && (
+            <motion.div
+              className={`bg-game-dark/40 rounded-xl p-4 mb-6 border ${
+                paymentInfo.cycleNumber === currentCycle?.cycleNumber
+                  ? "border-game-accent/20"
+                  : "border-red-500/20"
+              }`}
+              initial={{ opacity: 0, y: -20 }}
+              animate={{ opacity: 1, y: 0 }}
+            >
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="text-sm text-game-light/50">
+                    {paymentInfo.cycleNumber === currentCycle?.cycleNumber
+                      ? "Current Cycle Payment"
+                      : "Previous Cycle Payment"}
+                  </div>
+                  <div className="font-game text-game-accent mt-1">
+                    {paymentInfo.amount} ETH
+                  </div>
+                </div>
+                <a
+                  href={`https://sepolia.etherscan.io/tx/${paymentInfo.txHash}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-sm text-game-accent hover:text-game-accent/80 
+                            underline underline-offset-2"
+                >
+                  View Transaction
+                </a>
+              </div>
+              <div className="text-xs text-game-light/50 mt-2">
+                Cycle #{paymentInfo.cycleNumber} •{" "}
+                {new Date(paymentInfo.timestamp).toLocaleString()}
+              </div>
+            </motion.div>
+          )}
+
+          <PaymentModal
+            isOpen={showPaymentModal}
+            onClose={() => setShowPaymentModal(false)}
+            onPaymentComplete={() => {
+              setGameStarted(true);
+              setUserNumbers([]);
+              generateSystemNumbers();
+              playSound(GAME_SOUNDS.START);
+            }}
+          />
         </>
       )}
     </motion.div>

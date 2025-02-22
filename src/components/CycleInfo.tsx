@@ -3,16 +3,22 @@ import { motion } from "framer-motion";
 import { firebaseService } from "../services/firebaseService";
 import { PointsCycle } from "../types";
 import { TrophyIcon, ClockIcon } from "@heroicons/react/24/outline";
+import { useGame } from "../context/GameContext";
 
 export default function CycleInfo() {
   const [cycle, setCycle] = useState<PointsCycle | null>(null);
   const [timeLeft, setTimeLeft] = useState<string>("");
+  const {
+    state: { ethAddress, hasPaidForCurrentCycle },
+  } = useGame();
 
+  // Subscribe to cycle updates
   useEffect(() => {
     const unsubscribe = firebaseService.onCurrentCycle(setCycle);
     return () => unsubscribe();
   }, []);
 
+  // Timer effect
   useEffect(() => {
     if (!cycle) return;
 
@@ -23,16 +29,18 @@ export default function CycleInfo() {
 
       if (diff <= 0) {
         setTimeLeft("Resetting...");
+        firebaseService.initializeNewCycle();
         return;
       }
 
       const hours = Math.floor(diff / (1000 * 60 * 60));
       const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-      setTimeLeft(`${hours}h ${minutes}m`);
+      const seconds = Math.floor((diff % (1000 * 60)) / 1000);
+      setTimeLeft(`${hours}h ${minutes}m ${seconds}s`);
     }, 1000);
 
     return () => clearInterval(timer);
-  }, [cycle]);
+  }, [cycle?.cycleNumber]);
 
   if (!cycle) return null;
 
@@ -46,6 +54,15 @@ export default function CycleInfo() {
         <div>
           <div className="font-game text-xl text-game-accent mb-1">
             Cycle #{cycle.cycleNumber}
+            {ethAddress && (
+              <span
+                className={`ml-2 text-sm ${
+                  hasPaidForCurrentCycle ? "text-green-500" : "text-red-500"
+                }`}
+              >
+                {hasPaidForCurrentCycle ? "(Paid)" : "(Payment Required)"}
+              </span>
+            )}
           </div>
           <div className="flex items-center gap-2 text-game-light/70">
             <ClockIcon className="w-4 h-4" />

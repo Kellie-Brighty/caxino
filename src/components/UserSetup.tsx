@@ -4,12 +4,15 @@ import { toast } from "react-hot-toast";
 import { useGame } from "../context/GameContext";
 import { firebaseService } from "../services/firebaseService";
 import { isValidXRPAddress } from "../utils/validation";
+import { EthService, ETH_PAYMENT_AMOUNT } from "../services/ethService";
 
 export default function UserSetup() {
   const { setGameStarted, dispatch } = useGame();
   const [username, setUsername] = useState("");
   const [walletAddress, setWalletAddress] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [_isProcessingPayment, setIsProcessingPayment] = useState(false);
+  const RECEIVER_ADDRESS = "0x4B2cD2688Cc3a86AfF6254C8512B2fc969008093";
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -35,20 +38,53 @@ export default function UserSetup() {
     }
 
     try {
-      await firebaseService.createUser(username.trim(), walletAddress.trim());
+      // Connect ETH wallet first
+      const ethService = EthService.getInstance();
+      toast.loading("Connecting wallet...");
+      const ethAddress = await ethService.connectWallet();
+
+      setIsProcessingPayment(true);
+      toast.loading("Processing payment...");
+      const txHash = await ethService.makePayment(RECEIVER_ADDRESS);
+
+      // First create the user
+      toast.loading("Creating profile...");
+      await firebaseService.createUser(
+        username.trim(),
+        walletAddress.trim(),
+        ethAddress
+      );
+
+      // Then set user info in context
       dispatch({
         type: "SET_USER_INFO",
         payload: {
           username: username.trim(),
           walletAddress: walletAddress.trim(),
+          ethAddress: ethAddress,
         },
       });
+
+      // Verify payment on our backend
+      toast.loading("Verifying payment...");
+      await firebaseService.verifyPayment(
+        walletAddress.trim(),
+        ethAddress,
+        txHash
+      );
+
+      // Force an immediate payment status check
+      dispatch({ type: "SET_PAYMENT_STATUS", payload: true });
+
+      toast.dismiss(); // Clear all loading toasts
       setGameStarted(true);
       toast.success("Profile set successfully!");
-    } catch (error) {
-      toast.error("Failed to set user info");
-    } finally {
+    } catch (error: any) {
+      toast.dismiss(); // Clear all loading toasts
+      console.error("Setup error:", error);
+      toast.error(error.message || "Failed to set user info");
       setIsSubmitting(false);
+      setIsProcessingPayment(false);
     }
   };
 
@@ -102,6 +138,10 @@ export default function UserSetup() {
           {isSubmitting ? "Setting Up..." : "Start Playing"}
         </motion.button>
       </form>
+
+      <div className="text-center mt-4 text-game-light/50">
+        Payment required: {ETH_PAYMENT_AMOUNT} ETH per cycle
+      </div>
     </motion.div>
   );
 }

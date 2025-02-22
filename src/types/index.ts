@@ -19,6 +19,9 @@ export interface GameState {
   isWalletConnected: boolean;
   username: string | null;
   walletAddress: string | null;
+  ethAddress: string | null;
+  hasPaidForCurrentCycle: boolean;
+  currentPayment: PaymentInfo | null;
 }
 
 export interface LeaderboardEntry {
@@ -75,7 +78,17 @@ export interface PointsCycle {
   };
 }
 
+export interface PaymentInfo {
+  txHash: string;
+  amount: string;
+  timestamp: string;
+  cycleNumber: number;
+}
+
 export type GameAction =
-  // ... existing actions
-  | { type: "RESTORE_SESSION"; payload: { username: string; walletAddress: string; isWalletConnected: boolean } }
-  | { type: "SYNC_USER_DATA"; payload: { points: number; gamesPlayed: number; username: string } }; 
+  | { type: "SET_WALLET_CONNECTION"; payload: boolean }
+  | { type: "SET_GAME_STARTED"; payload: boolean }
+  | { type: "SET_USER_INFO"; payload: { username: string; walletAddress: string; ethAddress: string } }
+  | { type: "RESTORE_SESSION"; payload: GameState }
+  | { type: "SYNC_USER_DATA"; payload: { points: number; gamesPlayed: number; username: string } }
+  | { type: "SET_PAYMENT_STATUS"; payload: boolean }; 

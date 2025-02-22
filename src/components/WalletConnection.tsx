@@ -62,6 +62,7 @@ export default function WalletConnection() {
   const [showStart, setShowStart] = useState(true);
   const [currentWinner, setCurrentWinner] = useState<WinnerAlert | null>(null);
   const [showWinner, setShowWinner] = useState(false);
+  const [isStarting, setIsStarting] = useState(false);
   const [gameStats, setGameStats] = useState<GameStats>({
     totalPlayers: 0,
     totalRegistered: 0,
@@ -87,23 +88,26 @@ export default function WalletConnection() {
     return () => unsubscribe();
   }, []);
 
+  useEffect(() => {
+    if (isStarting) {
+      new Audio("/sounds/start.mp3").play().catch(() => {});
+      const timer = setInterval(() => {
+        setCountdown((prev) => {
+          if (prev <= 1) {
+            clearInterval(timer);
+            setWalletConnection(true);
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+      return () => clearInterval(timer);
+    }
+  }, [isStarting, setWalletConnection]);
+
   const handleStartGame = () => {
     setShowStart(false);
-    // Trigger success sound
-    new Audio("/sounds/start.mp3").play().catch(() => {});
-    const timer = setInterval(() => {
-      setCountdown((prev) => {
-        if (prev <= 1) {
-          clearInterval(timer);
-          setWalletConnection(true);
-          toast.success("Welcome to Caxino!", {
-            icon: "🎲",
-            duration: 3000,
-          });
-        }
-        return prev - 1;
-      });
-    }, 1000);
+    setIsStarting(true);
   };
 
   const handleCopyAddress = () => {

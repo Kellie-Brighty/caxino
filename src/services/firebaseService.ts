@@ -8,12 +8,14 @@ import {
   push,
 } from "firebase/database";
 import { db } from "../config/firebase";
+import { ETH_PAYMENT_AMOUNT } from "./ethService";
 import {
   LeaderboardEntry,
   Player,
   GameStats,
   WinnerAlert,
   PointsCycle,
+  PaymentInfo,
 } from "../types";
 
 interface CycleHistory {
@@ -29,13 +31,31 @@ interface CycleHistory {
   completed: boolean;
 }
 
+interface UserWithPayments {
+  walletAddress: string;
+  ethAddress: string;
+  payments?: {
+    [key: string]: {
+      txHash: string;
+      timestamp: string;
+      cycleNumber: number;
+      amount: string;
+    };
+  };
+}
+
 export const firebaseService = {
   // User Management
-  async createUser(username: string, walletAddress: string): Promise<void> {
+  async createUser(
+    username: string,
+    walletAddress: string,
+    ethAddress: string
+  ): Promise<void> {
     const userRef = ref(db, `users/${walletAddress}`);
     await set(userRef, {
       username,
       walletAddress,
+      ethAddress,
       points: 0,
       gamesPlayed: 0,
       createdAt: new Date().toISOString(),
@@ -352,7 +372,7 @@ export const firebaseService = {
     }
 
     const now = new Date();
-    const endTime = new Date(now.getTime() + 12 * 60 * 60 * 1000);
+    const endTime = new Date(now.getTime() + 4 * 60 * 60 * 1000); // 4 hours
 
     const newCycle = {
       targetPoints: 2000,
@@ -364,11 +384,12 @@ export const firebaseService = {
         second: null,
         third: null,
       },
+      paidUsers: {}, // Clear all paid users
     };
 
     await set(cycleRef, newCycle);
 
-    // Reset all user points
+    // Reset all user points and payment status
     const usersSnapshot = await get(usersRef);
     const users = usersSnapshot.val();
     if (users) {
@@ -376,6 +397,15 @@ export const firebaseService = {
       Object.keys(users).forEach((userKey) => {
         updates[`users/${userKey}/points`] = 0;
         updates[`users/${userKey}/lastReset`] = now.toISOString();
+        // Archive current cycle's payment to history if it exists
+        if (users[userKey].payments?.[currentCycle?.cycleNumber]) {
+          updates[
+            `users/${userKey}/paymentHistory/${currentCycle.cycleNumber}`
+          ] = users[userKey].payments[currentCycle.cycleNumber];
+        }
+        // Clear current cycle's payment
+        updates[`users/${userKey}/payments/${currentCycle?.cycleNumber}`] =
+          null;
       });
       await update(ref(db), updates);
     }
@@ -390,10 +420,29 @@ export const firebaseService = {
 
     const unsubscribe = onValue(cycleRef, async (snapshot: DataSnapshot) => {
       const cycle = snapshot.val();
-      if (!cycle) {
+      const now = new Date();
+      const cycleEndTime = cycle ? new Date(cycle.endTime) : null;
+
+      if (!cycle || (cycleEndTime && now > cycleEndTime)) {
         await this.initializeNewCycle();
         // Get the newly initialized cycle
         const newSnapshot = await get(cycleRef);
+
+        // Reset all users' payment status and stop ongoing games
+        const usersRef = ref(db, "users");
+        const usersSnapshot = await get(usersRef);
+        const users = usersSnapshot.val();
+        if (users) {
+          const updates: { [key: string]: any } = {};
+          Object.keys(users).forEach((userKey) => {
+            updates[`users/${userKey}/points`] = 0;
+            updates[`users/${userKey}/isGameStarted`] = false;
+            // Clear current cycle's payment status
+            updates[`users/${userKey}/payments/${cycle?.cycleNumber}`] = null;
+          });
+          await update(ref(db), updates);
+        }
+
         callback(newSnapshot.val());
       } else {
         callback(cycle);
@@ -507,5 +556,148 @@ export const firebaseService = {
         newPoints: leadingPlayer.points - 1000,
       });
     }
+  },
+
+  async verifyPayment(
+    walletAddress: string,
+    ethAddress: string,
+    txHash: string
+  ): Promise<void> {
+    const cycleRef = ref(db, "currentCycle");
+    const snapshot = await get(cycleRef);
+    const currentCycle = snapshot.val();
+
+    await update(ref(db), {
+      [`currentCycle/paidUsers/${ethAddress}`]: {
+        txHash,
+        timestamp: new Date().toISOString(),
+        walletAddress,
+      },
+      [`users/${walletAddress}/payments/${currentCycle.cycleNumber}`]: {
+        txHash,
+        timestamp: new Date().toISOString(),
+        cycleNumber: currentCycle.cycleNumber,
+        amount: ETH_PAYMENT_AMOUNT,
+        ethAddress,
+      },
+    });
+  },
+
+  async getCurrentCycle(): Promise<PointsCycle> {
+    const cycleRef = ref(db, "currentCycle");
+    const snapshot = await get(cycleRef);
+    return snapshot.val();
+  },
+
+  async getCurrentCyclePayment(
+    ethAddress: string
+  ): Promise<PaymentInfo | null> {
+    // First try getting from current cycle
+    const cycleRef = ref(db, "currentCycle");
+    const snapshot = await get(cycleRef);
+    const currentCycle = snapshot.val();
+
+    // Get all users to find the one with matching ethAddress
+    const usersRef = ref(db, "users");
+    const usersSnapshot = await get(usersRef);
+    const users = usersSnapshot.val();
+
+    // Find user with matching ethAddress
+    const user = Object.values(users).find(
+      (u): u is UserWithPayments =>
+        typeof u === "object" &&
+        u !== null &&
+        "ethAddress" in u &&
+        u.ethAddress === ethAddress
+    );
+
+    if (!user) return null;
+
+    // Check current cycle payments
+    if (currentCycle?.paidUsers?.[user.walletAddress]) {
+      return {
+        txHash: currentCycle.paidUsers[user.walletAddress].txHash,
+        amount: ETH_PAYMENT_AMOUNT,
+        timestamp: currentCycle.paidUsers[user.walletAddress].timestamp,
+        cycleNumber: currentCycle.cycleNumber,
+      };
+    }
+
+    // If not in current cycle, check user's payment history
+    if (user.payments) {
+      const latestPayment = Object.values(user.payments).sort(
+        (a: any, b: any) => b.timestamp.localeCompare(a.timestamp)
+      )[0];
+      if (latestPayment) {
+        return {
+          txHash: latestPayment.txHash,
+          amount: ETH_PAYMENT_AMOUNT,
+          timestamp: latestPayment.timestamp,
+          cycleNumber: latestPayment.cycleNumber,
+        };
+      }
+    }
+
+    return null;
+  },
+
+  async hasValidPaymentForCycle(
+    ethAddress: string,
+    cycleNumber: number
+  ): Promise<boolean> {
+    console.group(`Payment Check - Cycle ${cycleNumber}`);
+    console.log(`Checking payment for ${ethAddress}`);
+
+    const cycleRef = ref(db, "currentCycle");
+    const cycleSnapshot = await get(cycleRef);
+    const currentCycle = cycleSnapshot.val();
+
+    // Check if cycle has ended
+    const now = new Date();
+    const cycleEndTime = new Date(currentCycle.endTime);
+    if (now > cycleEndTime) {
+      console.log("Cycle has ended");
+      console.groupEnd();
+      return false;
+    }
+
+    const usersRef = ref(db, "users");
+    const snapshot = await get(usersRef);
+    const users = snapshot.val();
+
+    const user = Object.values(users).find(
+      (u): u is UserWithPayments =>
+        typeof u === "object" &&
+        u !== null &&
+        "ethAddress" in u &&
+        u.ethAddress === ethAddress.toLowerCase()
+    );
+
+    console.log("User found:", user ? "Yes" : "No");
+
+    if (!user) {
+      console.log("No user found with this ETH address");
+      console.groupEnd();
+      return false;
+    }
+
+    // Check both locations where payment could be recorded
+    const hasPaidInCycle = Boolean(
+      currentCycle?.paidUsers?.[ethAddress.toLowerCase()]
+    );
+    const hasPaidInUser = Boolean(user.payments?.[cycleNumber]);
+
+    console.log("Payment status:", {
+      hasPaidInCycle,
+      hasPaidInUser,
+      cycleNumber,
+      currentCycleNumber: currentCycle?.cycleNumber,
+    });
+
+    const isValid = hasPaidInCycle || hasPaidInUser;
+    console.log("Payment valid:", isValid);
+    console.groupEnd();
+
+    return isValid;
   },
 };
